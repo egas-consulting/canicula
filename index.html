@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>story canicula</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/mapbox/assembly/publisher-staging/src/svgs/mapbox.svg">
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.js"></script>
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/intersection-observer@0.12.0/intersection-observer.js"></script>
+    <script src="https://unpkg.com/scrollama"></script>
+    <style>
+        body {
+            margin:0;
+            padding:0;
+            font-family:'Roboto', sans-serif;
+        }
+        a, a:hover, a:visited {
+            color: #000000;
+        }
+        #map {
+            top:0;
+            height: 100vh;
+            width:100vw;
+            position: fixed;
+        }
+        #map-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.404);
+            z-index: 2;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
+        }
+        .mapboxgl-popup {
+            max-width: 250px;
+            font-family: 'Open Sans', sans-serif;
+        }
+        .mapboxgl-popup-content {
+            text-align: center;
+        }
+        #mapInset {
+            bottom:50px;
+            right:30px;
+            height: 180px;
+            width:250px;
+            max-width:100%;
+            position: fixed;
+            z-index: 3;
+            opacity: 1;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+        }
+        #mapInset .mapboxgl-ctrl-bottom-left{
+            display: none;
+        }
+        @media (max-width: 500px) {
+            #mapInset {
+                display: none;
+            }
+        }
+        #header {
+            margin: auto;
+            width: 100%;
+            position: relative;
+            z-index: 5;
+            background-color: #20202000;
+        }
+        #header h1, #header h2, #header p {
+            margin: 0;
+            padding: 1vh 4vw;
+            text-align: center; 
+        }
+        #header h1 {
+            padding-top:10vh;
+        }
+        #footer {
+            width: 100%;
+            min-height: 1vh;
+            padding-top: 1vh;
+            padding-bottom: 1vh;
+            text-align: center;
+            line-height: 25px;
+            font-size: 13px;
+            position: relative;
+            z-index: 5;
+        }
+        #features {
+            padding-top: 10vh;
+            padding-bottom: 10vh;
+            position: relative;
+            z-index: 5;
+        }
+        .hidden {
+            visibility: hidden;
+        }
+        .centered {
+            width: 70vw;
+            margin: 0 auto;
+        }
+        @media (max-width: 750px) {
+            .centered, .lefty, .righty, .fully {
+                width: 90vw;
+                margin: 0 auto;
+            }
+        }
+        .lefty {
+            width: 33vw;
+            margin-left: 5vw;
+        }
+        .righty {
+            width: 33vw;
+            margin-left: 62vw;
+        }
+        .fully {
+            width: 100%;
+            margin: auto;
+        }
+        .light {
+            color: #0a0a0a;
+            background-color: #ffffffc2;
+            border-radius: 0px;
+        }
+        .dark {
+            color: #3a2a00;
+            background-color: #14141400;
+        }
+        .step {
+            padding-bottom: 50vh;
+            opacity: 0.25;
+        }
+        .step.active {
+            opacity: 0.9;
+        }
+        .step div {
+            padding:  25px 50px;
+            line-height: 25px;
+            font-size: 1rem;
+        }
+        .step img {
+            width: 100%;
+        }
+        #map-legend {
+            position: fixed;
+            bottom: 240px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 3;
+            font-family: sans-serif;
+            font-size: 0.8em;
+            width: 200px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        #map-legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+        }
+        #map-legend p {
+            margin: 0 0 10px 0;
+            font-style: italic;
+        }
+        .legend-section {
+            margin-bottom: 10px;
+        }
+        .legend-section strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .legend-size-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-key-circle {
+            display: inline-block;
+            background-color: #fd8d3c;
+            border-radius: 50%;
+            border: 1px solid #fff;
+            box-shadow: 0 0 0 1px #999;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .legend-color-bar {
+            height: 15px;
+            width: 100%;
+            background: linear-gradient(to right, #ffffb2, #fecc5c, #fd8d3c, #f03b20, #bd0026);
+            border-radius: 10px;
+        }
+        .legend-color-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+        }
+        .mapboxgl-canvas-container.mapboxgl-touch-zoom-rotate.mapboxgl-touch-drag-pan,
+        .mapboxgl-canvas-container.mapboxgl-touch-zoom-rotate.mapboxgl-touch-drag-pan .mapboxgl-canvas {
+            touch-action: unset;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="map-overlay"></div>
+
+<div id="map-legend">
+    <h4>Zile caniculare (total pe 5 ani)</h4>
+    <p>Perioada: <span id="legend-period"></span></p>
+    
+    <div class="legend-section">
+        <strong>Dimensiune (Orașe)</strong>
+        <div class="legend-size-item">
+            <span class="legend-key-circle" style="width: 8px; height: 8px;"></span> 0 zile
+        </div>
+        <div class="legend-size-item">
+            <span class="legend-key-circle" style="width: 20px; height: 20px;"></span> 75 zile
+        </div>
+        <div class="legend-size-item">
+            <span class="legend-key-circle" style="width: 32px; height: 32px;"></span> 150 zile
+        </div>
+    </div>
+    
+    <div class="legend-section">
+        <strong>Culoare (Orașe & Județe)</strong>
+        <div class="legend-color-bar"></div>
+        <div class="legend-color-labels">
+            <span>0</span>
+            <span>150+</span>
+        </div>
+    </div>
+</div>
+<div id="mapInset"></div>
+<div id="story"></div>
+
+<script>
+
+var config = {
+    style: 'mapbox://styles/ed1990/cmeq1eqcg017201pj928damp1',
+    accessToken: 'pk.eyJ1IjoiZWQxOTkwIiwiYSI6ImNsbHdjMWNsODA0NnMzanN5amI3YjVwdzgifQ.PL1xMSDztFZISCkgeNZ2gg',
+    showMarkers: false,
+    markerColor: '#3FB1CE',
+    projection: 'globe',
+    inset: false,
+    theme: 'light',
+    use3dTerrain: false, 
+    auto: false,
+    title: '<span style="font-family:roboto; padding: 0.5vh; border-radius: 10px; color:#141414; font-size:1.3rem; " >De la veri răcoroase la veri sufocante </span>',
+    subtitle: '<span style=" font-family: Arial; color:#141414; font-size:1.9rem;" >Explozia zilelor caniculare în România în ultimele patru decenii</span>',
+    byline: '<p>Vlad Barză</p>',
+    footer: '<p style="margin-top:1px; margin-bottom:1px;"><b>25 august 2025 </b></p> <p style="margin-top:1px; margin-bottom:1px;"><b>Sursa datelor:</b> platformele Meteociel.fr, TuTiempo.es și Infoclimat.fr</p> ',
+    chapters: [
+        {
+            id: 'unu',
+            alignment: 'center',        
+            hidden: false,
+            showOverlay: true, 
+            title: '',
+            image: '',
+            description: 'Pare incredibil, însă în prima parte a anilor 80 erau extrem de rare zilele caniculare, în timp ce acum ele apar și în nordul țării, iar în sud pot fi și peste 40 pe an. <b>Cât de mult s-a schimbat pe timp de vară clima în 15 orașe din România?</b> De la veri fără caniculă, la cele cu zeci de zile toride - Transformarea climei românești în anotimpul cald',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 8,
+                pitch: 70,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: 'hideDataLayers', 
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'doi',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true, 
+            title: '',
+            image: '',
+            description: 'Simțim cu toții că verile sunt foarte calde și greu de suportat și ne-ar fi tare greu să credem cât de mult s-au schimbat verile față de acum patru decenii, când nu se discuta în România despre încălzirea globală.<br><br> În prima parte a anilor 80 ai secolului trecut au fost veri extrem de răcoroase, zilele cu temperaturi de peste 35 C apăreau foarte rar, iar nopțile erau reci, mai ales la final de august, dovadă că multe recorduri de frig încă sunt „în picioare” de la final de august 1980 și 1981. În 1984, lunile iunie și iulie au fost extraordinar de reci, cu o medie cu 5 grade Celsius sub lunile similare din 2024. Și august a fost extrem de rece în acel an.',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 7,
+                pitch: 70,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: 'hideDataLayers',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        
+        {
+            id: 'patru',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true, 
+            title: '',
+            image: '',
+            description: 'Ultimii cinci ani au fost cei mai calzi de când există date meteo în România și am comparat acești cinci ani cu perioada 1980-1984, când clima era cu totul diferită la noi, cu ierni dure și multă zăpadă și îngheț și cu veri în care erau zile „eveniment” cele în care după prânz temperatura trece de 32-33 C.<iframe src="https://flo.uri.sh/visualisation/24818630/embed" title="Interactive or visual content" class="flourish-embed-iframe" frameborder="0" scrolling="no" style="width:100%;height:420px;" sandbox="allow-same-origin allow-forms allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe><div style="width:100%!;margin-top:4px!important;text-align:right!important;"><a class="flourish-credit" href="https://public.flourish.studio/visualisation/24818630/?utm_source=embed&utm_campaign=visualisation/24818630" target="_top" style="text-decoration:none!important"><img alt="Made with Flourish" src="https://public.flourish.studio/resources/made_with_flourish.svg" style="width:105px!important;height:16px!important;border:none!important;margin:0!important;"> </a></div>',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: 'hideDataLayers', 
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'cinci',
+            alignment: 'center',
+            hidden: false,
+            title: '',
+            image: '',
+            description: 'Am comparat numărul de zile caniculare (adică temperatură maximă de peste 35 C) din cinci ani ai deceniului nouă din secolul trecut cu perioada 2020-2024, pentru 15 orașe din țară. Comparația spune totul despre cât de mult s-a încălzit clima României în 40 de ani, fiindcă în anii 80 încă aveam parte de „vechea climă”, cea cu ierni reci și veri suportabile. Perioada 1980-84 a avut extrem de puține zile caniculare în țară, dar în anii 1987 și 1988 au fost și temperaturi de peste 40 de grade Celsius.',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: 'show1980sData',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'sase',
+            alignment: 'center',
+            hidden: false,
+            title: '',
+            image: '',
+            description: 'Când canicula era o raritate: cum s-au schimbat verile românești din anii ’80 până azi. Spre exemplu, la Brașov puteau trece 10-15 ani fără zile caniculare, în timp ce în vara anului trecut au fost cinci zile consecutive cu maxime de peste 35 C. <iframe src="https://flo.uri.sh/visualisation/24819096/embed" title="Interactive or visual content" class="flourish-embed-iframe" frameborder="0" scrolling="no" style="width:100%;height:300px;" sandbox="allow-same-origin allow-forms allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe><div style="width:100%!;margin-top:4px!important;text-align:right!important;"><a class="flourish-credit" href="https://public.flourish.studio/visualisation/24819096/?utm_source=embed&utm_campaign=visualisation/24819096" target="_top" style="text-decoration:none!important"><img alt="Made with Flourish" src="https://public.flourish.studio/resources/made_with_flourish.svg" style="width:105px!important;height:16px!important;border:none!important;margin:0!important;"> </a></div> ',
+            location: {
+                center: [25.6012, 45.6579],
+                zoom: 10,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+
+        {
+            id: 'sase.1',
+            alignment: 'center',
+            hidden: false,
+            title: '',
+            image: '',
+            description: 'La Turnu Măgurele, media era de sub trei zile caniculare pe an la începutul anilor 80, iar acum suntem pe la 30 pe an. <iframe src="https://flo.uri.sh/visualisation/24819140/embed" title="Interactive or visual content" class="flourish-embed-iframe" frameborder="0" scrolling="no" style="width:100%;height:300px;" sandbox="allow-same-origin allow-forms allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe><div style="width:100%!;margin-top:4px!important;text-align:right!important;"><a class="flourish-credit" href="https://public.flourish.studio/visualisation/24819140/?utm_source=embed&utm_campaign=visualisation/24819140" target="_top" style="text-decoration:none!important"><img alt="Made with Flourish" src="https://public.flourish.studio/resources/made_with_flourish.svg" style="width:105px!important;height:16px!important;border:none!important;margin:0!important;"> </a></div>',
+            location: {
+                center: [24.8692, 43.7467],
+                zoom: 10,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'sapte',
+            alignment: 'center',
+            hidden: false,
+            title: '',
+            image: '',
+            description: 'După 1992 au venit o serie de ani mai calzi, încălzirea s-a simțit mai puternic după anul 2000 și accelerarea s-a produs după 2015. Acum, aproape fiecare an devine „cel mai cald de până acum”. Comparația arată că în ultimii cinci ani numărul de zile caniculare a crescut în sudul țării și de peste 10-15 ori, față de prima parte a anilor 80 când verile erau lipsite de valuri de căldură. În orașe precum Calafat și Turnu Măgurele avem în medie peste 30 de zile caniculare/an, iar anul trecut au fost 49 de astfel de zile la Calafat și 46 la stația meteo București Filaret.',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: 'show2020sData',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'opt',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: '',
+            image: '',
+            description: 'Datele mai arată un lucru: au apărut zile caniculare în orașe unde ele lipseau la începutul anilor 80, cum ar fi Brașov, Cluj, Satu Mare sau Bistrița. În zona Moldovei zilele cu maxime de peste 35 C erau extrem de rare, iar în prezent pot fi și peste 50 în cinci ani, față de o zi pe an. Meteorologii descriu canicula în România ca fiind o perioadă în care temperaturile diurne ating sau depășesc +35 °C, iar în cele mai calde locuri din țară nopțile sunt „tropicale”, adică minima nu coboară sub 20 °C. Cele mai severe valuri de căldură au durat mai mult de 10 zile în care temperaturile au depășit 35 Celsius.',
+            location: {
+                center: [24.5, 47.1337],
+                zoom: 10,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'noua',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: '',
+            image: '',
+            description: 'Zonele înalte nu au încă parte de zile caniculare. Unde nu pot fi niciodată 35 °C? Nu au fost zile caniculare la stații meteo situate la peste 1.000 m alt (cum ar fi Predeal) și doar extrem de rar au fost zile caniculare la peste 750 m altitudine. Spre exemplu, doar de câteva ori în ultimul secol au fost 35 C în „micile Siberii” din țară (Joseni, Miercurea Ciuc, Întorsura Buzăului).',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'zece',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: '',
+            image: '',
+            description: 'Extrem de rare sunt zilele caniculare la Marea Neagră (în zone precum Constanța, Mangalia și Sulina), din cauza influenței moderatoare a mării. Nopțile de vară sunt foarte calde pe Litoral, însă brizele marine atenuează arșița zilelor toride. La Constanța a fost o singură zi caniculară în ultimii ani, dar au fost zeci de nopți tropicale. Valurile de căldură sunt o mare problemă din cauză că afectează agricultura, pun în pericol siguranța alimentară, agravează seceta, epuizează resursele de apă și cresc riscul incendiilor de vegetație. ',
+            location: {
+                center: [28.6348, 44.1598],
+                zoom: 10,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'unsprezece',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: '',
+            image: '',
+            description: 'Pentru oamenii obișnuiți reprezintă o problemă, fiindcă nici noaptea nu se răcește mult, așa că este greu să dormi cum trebuie și oboseala se acumulează după mai mult nopți cu temperaturi ridicate, În iulie anul trecut, la stația meteo Filaret din București au fost 13 nopți „tropicale” consecutive, iar în cea mai caldă, minima a fost de +26,2 C. Calafat este orașul care deține mai multe recorduri de căldură și adesea este pe timp de vară lider la temperaturile maxime. În iunie 2025 au fost 10 zile caniculare, iar în iulie, 16 zile (dintre care patru cu maxima de 40 C și peste). În august anul trecut au fost 20 de zile caniculare. ',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'doisprezece',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: 'Cum s-au schimbat verile în România față de acum patru decenii',
+            image: '',
+            description: '- Luna iunie aduce tot mai des temperaturi de peste 35 de grade în sud și de peste 30 C în restul țării. În vara lui 2024 ANM a emis cel mai timpuriu cod roşu de caniculă, în zilele de 22-23 iunie. <br>- Aproape fără excepție luna iulie era cea mai caldă din an, însă au fost în ultimul deceniu cazuri în care august a adus temperaturi medii mai mari. August este în general mai caldă decât iulie la peste 2.000 m altitudine, <br> - La final de august veneau nopți mai răcoroase, însă în ultimii ani acest lucru s-a petrecut mai rar, iar septembrie a fost, cel puțin în prima ei jumătate, o veritabilă lună de vară. În mod excepțional au apărut temperaturi caniculare și după 20 octombrie, în 2023.',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'treisprezece',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: '',
+            image: '',
+            description: '- Codul roșu de caniculă apare tot mai des: Spre exemplu, în lunile iulie şi august 2024 a fost cod roşu de la ANM pentru cele mai lungi intervale de zile consecutive cu val de căldură persistent, intens şi extins, respectiv șase zile consecutive în perioadele 13-18 iulie şi 15-20 august 2024. <br> Dacă în urmă cu patru decenii canicula era o raritate, acum ea a devenit regula. Iar tendința este clară: următoarele veri vor fi și mai fierbinți și - undeva în viitor - va fi depășit și recordul absolut de temperatură pentru România (+44,5 C, Ion Sion, jud Brăila).',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+        {
+            id: 'paisprezece',
+            alignment: 'center',
+            hidden: false,
+            showOverlay: true,
+            title: 'Recorduri pentru zilele caniculare din România',
+            image: '',
+            description: 'Cea mai timpurie temperatură caniculară: pe 10 aprilie 1985, la Bechet (Oltenia), +35,5 C <br> Cea mai târzie temperatură caniculară, pe 21 octombrie 2023 la Turnu Măgurele (+35,1 C) și Bechet (35 C). <br> Cea mai târzie temperatură de peste 38 C:, pe 15 octombrie 1991, Zimnicea, +38,4 C. <br> La ce stații meteo sunt cele mai multe zile caniculare: Calafat, Zimnicea, Băilești, Turnu Măgurele, Giurgiu, Alexandria, București Filaret. <br>',
+            location: {
+                center: [24.9667, 45.8500],
+                zoom: 5.9,
+                pitch: 50,
+                bearing: 0,
+            },
+            mapAnimation: 'flyTo',
+            rotateAnimation: false,
+            callback: '',
+            onChapterEnter: [],
+            onChapterExit: []
+        },
+    ]
+};
+</script>
+
+<script>
+var initLoad = true;
+var layerTypes = {
+    'fill': ['fill-opacity'],
+    'line': ['line-opacity'],
+    'circle': ['circle-opacity', 'circle-stroke-opacity'],
+    'symbol': ['icon-opacity', 'text-opacity'],
+    'raster': ['raster-opacity'],
+    'fill-extrusion': ['fill-extrusion-opacity'],
+    'heatmap': ['heatmap-opacity']
+}
+
+var alignments = {
+    'left': 'lefty',
+    'center': 'centered',
+    'right': 'righty',
+    'full': 'fully'
+}
+
+const citiesGeoJSON = {
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "Oras": "București Băneasa", "val_1980_1984": 6, "val_2020_2024": 100 }, "geometry": { "type": "Point", "coordinates": [ 26.0833, 44.5031 ] } }, { "type": "Feature", "properties": { "Oras": "Cluj Napoca", "val_1980_1984": 0, "val_2020_2024": 8 }, "geometry": { "type": "Point", "coordinates": [ 23.6236, 46.7712 ] } }, { "type": "Feature", "properties": { "Oras": "Iași", "val_1980_1984": 0, "val_2020_2024": 34 }, "geometry": { "type": "Point", "coordinates": [ 27.6014, 47.1585 ] } }, { "type": "Feature", "properties": { "Oras": "Brașov", "val_1980_1984": 0, "val_2020_2024": 6 }, "geometry": { "type": "Point", "coordinates": [ 25.6012, 45.6579 ] } }, { "type": "Feature", "properties": { "Oras": "Satu Mare", "val_1980_1984": 0, "val_2020_2024": 39 }, "geometry": { "type": "Point", "coordinates": [ 22.885, 47.7928 ] } }, { "type": "Feature", "properties": { "Oras": "Drobeta Turnu Severin", "val_1980_1984": 16, "val_2020_2024": 106 }, "geometry": { "type": "Point", "coordinates": [ 22.6597, 44.6369 ] } }, { "type": "Feature", "properties": { "Oras": "Turnu Măgurele", "val_1980_1984": 13, "val_2020_2024": 152 }, "geometry": { "type": "Point", "coordinates": [ 24.8692, 43.7467 ] } }, { "type": "Feature", "properties": { "Oras": "Constanța", "val_1980_1984": 1, "val_2020_2024": 1 }, "geometry": { "type": "Point", "coordinates": [ 28.6348, 44.1598 ] } }, { "type": "Feature", "properties": { "Oras": "Oradea", "val_1980_1984": 0, "val_2020_2024": 48 }, "geometry": { "type": "Point", "coordinates": [ 21.9211, 47.0722 ] } }, { "type": "Feature", "properties": { "Oras": "Timișoara", "val_1980_1984": 9, "val_2020_2024": 88 }, "geometry": { "type": "Point", "coordinates": [ 21.2087, 45.7489 ] } }, { "type": "Feature", "properties": { "Oras": "Galați", "val_1980_1984": 3, "val_2020_2024": 54 }, "geometry": { "type": "Point", "coordinates": [ 28.0444, 45.436 ] } }, { "type": "Feature", "properties": { "Oras": "Deva", "val_1980_1984": 2, "val_2020_2024": 37 }, "geometry": { "type": "Point", "coordinates": [ 22.9167, 45.8833 ] } }, { "type": "Feature", "properties": { "Oras": "Bacău", "val_1980_1984": 2, "val_2020_2024": 24 }, "geometry": { "type": "Point", "coordinates": [ 26.913, 46.5671 ] } }, { "type": "Feature", "properties": { "Oras": "Bistrița", "val_1980_1984": 0, "val_2020_2024": 7 }, "geometry": { "type": "Point", "coordinates": [ 24.5, 47.1337 ] } }, { "type": "Feature", "properties": { "Oras": "Buzău", "val_1980_1984": 3, "val_2020_2024": 67 }, "geometry": { "type": "Point", "coordinates": [ 26.8333, 45.15 ] } }
+  ]
+};
+
+const cityToCountyMap = {
+    "București Băneasa": "MUNICIPIUL BUCUREȘTI",
+    "Cluj Napoca": "CLUJ",
+    "Iași": "IAȘI",
+    "Brașov": "BRAȘOV",
+    "Satu Mare": "SATU MARE",
+    "Drobeta Turnu Severin": "MEHEDINȚI",
+    "Turnu Măgurele": "TELEORMAN",
+    "Constanța": "CONSTANȚA",
+    "Oradea": "BIHOR",
+    "Timișoara": "TIMIȘ",
+    "Galați": "GALAȚI",
+    "Deva": "HUNEDOARA",
+    "Bacău": "BACĂU",
+    "Bistrița": "BISTRIȚA-NĂSĂUD",
+    "Buzău": "BUZĂU"
+};
+
+function updateDataLayers(period) {
+    const propertyName = period === '1980' ? 'val_1980_1984' : 'val_2020_2024';
+    
+    const radiusExpression = ['interpolate', ['linear'], ['get', propertyName], 0, 4, 152, 40];
+
+    
+    const colorExpression = [
+        'case',
+        ['==', ['get', propertyName], null], 
+        'rgba(0, 0, 0, 0)', 
+        
+        ['interpolate', ['linear'], ['get', propertyName], 
+            0, '#ffffb2', 
+            40, '#fecc5c', 
+            80, '#fd8d3c', 
+            120, '#f03b20', 
+            160, '#bd0026'
+        ]
+    ];
+
+    
+    map.setPaintProperty('cities-heat-circles', 'circle-radius', radiusExpression);
+    map.setPaintProperty('cities-heat-circles', 'circle-color', colorExpression);
+    map.setPaintProperty('cities-heat-circles', 'circle-opacity', 0.85);
+
+    
+    map.setPaintProperty('counties-heat-fill', 'fill-color', colorExpression);
+    map.setPaintProperty('counties-heat-fill', 'fill-opacity', 0.6);
+}
+
+function show1980sData() {
+    const legend = document.getElementById('map-legend');
+    document.getElementById('legend-period').innerText = '1980-1984';
+    legend.style.opacity = '1';
+    legend.style.visibility = 'visible';
+    updateDataLayers('1980');
+}
+
+function show2020sData() {
+    const legend = document.getElementById('map-legend');
+    document.getElementById('legend-period').innerText = '2020-2024';
+    legend.style.opacity = '1';
+    legend.style.visibility = 'visible';
+    updateDataLayers('2020');
+}
+
+function hideDataLayers() {
+    const legend = document.getElementById('map-legend');
+    legend.style.opacity = '0';
+    legend.style.visibility = 'hidden';
+    map.setPaintProperty('cities-heat-circles', 'circle-opacity', 0);
+    map.setPaintProperty('counties-heat-fill', 'fill-opacity', 0);
+}
+
+
+function getLayerPaintType(layer) {
+    var layerType = map.getLayer(layer).type;
+    return layerTypes[layerType];
+}
+
+function setLayerOpacity(layer) {
+    var paintProps = getLayerPaintType(layer.layer);
+    paintProps.forEach(function(prop) {
+        var options = {};
+        if (layer.duration) {
+            var transitionProp = prop + "-transition";
+            options = { "duration": layer.duration };
+            map.setPaintProperty(layer.layer, transitionProp, options);
+        }
+        map.setPaintProperty(layer.layer, prop, layer.opacity, options);
+    });
+}
+
+var story = document.getElementById('story');
+var features = document.createElement('div');
+features.setAttribute('id', 'features');
+
+var header = document.createElement('div');
+
+if (config.title) {
+    var titleText = document.createElement('h1');
+    titleText.innerHTML = config.title;
+    header.appendChild(titleText);
+}
+
+if (config.subtitle) {
+    var subtitleText = document.createElement('h2');
+    subtitleText.innerHTML = config.subtitle;
+    header.appendChild(subtitleText);
+}
+
+if (config.byline) {
+    var bylineText = document.createElement('p');
+    bylineText.innerHTML = config.byline;
+    header.appendChild(bylineText);
+}
+
+if (header.innerText.length > 0) {
+    header.classList.add(config.theme);
+    header.setAttribute('id', 'header');
+    story.appendChild(header);
+}
+
+config.chapters.forEach((record, idx) => {
+    var container = document.createElement('div');
+    var chapter = document.createElement('div');
+
+    if (record.title) {
+        var title = document.createElement('h3');
+        title.innerHTML = record.title;
+        chapter.appendChild(title);
+    }
+
+    if (record.image) {
+        var image = new Image();
+        image.src = record.image;
+        chapter.appendChild(image);
+    }
+
+    if (record.description) {
+        var story = document.createElement('p');
+        story.innerHTML = record.description;
+        chapter.appendChild(story);
+    }
+
+    container.setAttribute('id', record.id);
+    container.classList.add('step');
+    if (idx === 0) {
+        container.classList.add('active');
+    }
+
+    chapter.classList.add(config.theme);
+    container.appendChild(chapter);
+    container.classList.add(alignments[record.alignment] || 'centered');
+    if (record.hidden) {
+        container.classList.add('hidden');
+    }
+    features.appendChild(container);
+});
+
+story.appendChild(features);
+
+var footer = document.createElement('div');
+
+if (config.footer) {
+    var footerText = document.createElement('p');
+    footerText.innerHTML = config.footer;
+    footer.appendChild(footerText);
+}
+
+if (footer.innerText.length > 0) {
+    footer.classList.add(config.theme);
+    footer.setAttribute('id', 'footer');
+    story.appendChild(footer);
+}
+
+mapboxgl.accessToken = config.accessToken;
+
+const transformRequest = (url) => {
+    const hasQuery = url.indexOf("?") !== -1;
+    const suffix = hasQuery ? "&pluginName=scrollytellingV2" : "?pluginName=scrollytellingV2";
+    return {
+      url: url + suffix
+    }
+}
+
+var map = new mapboxgl.Map({
+    container: 'map',
+    style: config.style,
+    center: config.chapters[0].location.center,
+    zoom: config.chapters[0].location.zoom,
+    bearing: config.chapters[0].location.bearing,
+    pitch: config.chapters[0].location.pitch,
+    interactive: true,
+    transformRequest: transformRequest,
+    projection: config.projection
+});
+
+if (config.inset) {
+ var insetMap = new mapboxgl.Map({
+    container: 'mapInset',
+    style: 'mapbox://styles/mapbox/dark-v10',
+    center: config.chapters[0].location.center,
+    zoom: 3,
+    hash: false,
+    interactive: false,
+    attributionControl: false,
+  });
+}
+
+if (config.showMarkers) {
+    var marker = new mapboxgl.Marker({ color: config.markerColor });
+    marker.setLngLat(config.chapters[0].location.center).addTo(map);
+}
+
+var scroller = scrollama();
+
+async function loadAndAddCountyLayer() {
+    try {
+        const response = await fetch('harta.geojson');
+        const countyShapes = await response.json();
+
+        const cityDataLookup = {};
+        citiesGeoJSON.features.forEach(city => {
+            const countyName = cityToCountyMap[city.properties.Oras];
+            if (countyName) {
+                cityDataLookup[countyName] = {
+                    val_1980_1984: city.properties.val_1980_1984,
+                    val_2020_2024: city.properties.val_2020_2024
+                };
+            }
+        });
+        
+        countyShapes.features.forEach(countyFeature => {
+            const countyName = countyFeature.properties.jud;
+            const data = cityDataLookup[countyName];
+            if (data) {
+                countyFeature.properties.val_1980_1984 = data.val_1980_1984;
+                countyFeature.properties.val_2020_2024 = data.val_2020_2024;
+            } else {
+                // --- CHANGE 2: ASSIGN NULL INSTEAD OF 0 ---
+                // This is critical for differentiating counties with no data 
+                // from counties that have data but the value is 0.
+                countyFeature.properties.val_1980_1984 = null;
+                countyFeature.properties.val_2020_2024 = null;
+            }
+        });
+
+        map.addSource('romania-counties', {
+            'type': 'geojson',
+            'data': countyShapes
+        });
+        
+        map.addLayer({
+            'id': 'counties-heat-fill',
+            'type': 'fill',
+            'source': 'romania-counties',
+            'paint': {
+                'fill-color': 'rgba(0,0,0,0)', // Start fully transparent
+                'fill-opacity': 0, 
+                'fill-outline-color': '#FFFFFF'
+            }
+        }, 'cities-heat-circles'); 
+
+    } catch (error) {
+        console.error('Error loading or processing county GeoJSON:', error);
+    }
+}
+
+
+map.on("load", function() {
+    if (config.use3dTerrain) {
+        map.addSource('mapbox-dem', { 'type': 'raster-dem', 'url': 'mapbox://mapbox.mapbox-terrain-dem-v1', 'tileSize': 512, 'maxzoom': 14 });
+        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+        map.addLayer({ 'id': 'sky', 'type': 'sky', 'paint': { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0.0, 0.0], 'sky-atmosphere-sun-intensity': 15 } });
+    };
+
+    map.addSource('romania-cities', { 'type': 'geojson', 'data': citiesGeoJSON });
+
+    map.addLayer({
+        'id': 'cities-heat-circles',
+        'type': 'circle',
+        'source': 'romania-cities',
+        'paint': {
+            'circle-pitch-alignment': 'map',   
+            'circle-pitch-scale': 'map',       
+            'circle-radius': 4,
+            'circle-color': '#ffffb2',
+            'circle-stroke-color': 'white',
+            'circle-stroke-width': 1,
+            'circle-opacity': 0 
+        }
+    });
+
+    loadAndAddCountyLayer();
+
+    const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false });
+
+    map.on('mouseenter', 'cities-heat-circles', (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        const coordinates = e.features[0].geometry.coordinates.slice();
+        const properties = e.features[0].properties;
+        const description = `<h4>${properties.Oras}</h4><p>Zile caniculare (2020-2024): <b>${properties.val_2020_2024}</b></p><p>Zile caniculare (1980-1984): <b>${properties.val_1980_1984}</b></p>`;
+        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+            coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+        }
+        popup.setLngLat(coordinates).setHTML(description).addTo(map);
+    });
+
+    map.on('mouseleave', 'cities-heat-circles', () => {
+        map.getCanvas().style.cursor = '';
+        popup.remove();
+    });
+
+    if (config.inset) {
+        map.on('move', getInsetBounds);
+    }
+    
+    scroller
+    .setup({
+        step: '.step',
+        offset: 0.5,
+        progress: true
+    })
+    .onStepEnter(async response => {
+        var current_chapter = config.chapters.findIndex(chap => chap.id === response.element.id);
+        var chapter = config.chapters[current_chapter];
+        
+        const mapOverlay = document.getElementById('map-overlay');
+        if (chapter.showOverlay) {
+            mapOverlay.style.opacity = '1';
+            mapOverlay.style.visibility = 'visible';
+            mapOverlay.style.pointerEvents = 'auto';
+        } else {
+            mapOverlay.style.opacity = '0';
+            mapOverlay.style.visibility = 'hidden';
+            mapOverlay.style.pointerEvents = 'none';
+        }
+
+        response.element.classList.add('active');
+        map[chapter.mapAnimation || 'flyTo'](chapter.location);
+
+        if (config.inset) {
+          if (chapter.location.zoom < 5) {
+            insetMap.flyTo({center: chapter.location.center, zoom: 0});
+          }
+          else {
+            insetMap.flyTo({center: chapter.location.center, zoom: 3});
+          }
+        }
+        if (config.showMarkers) {
+            marker.setLngLat(chapter.location.center);
+        }
+        if (chapter.onChapterEnter.length > 0) {
+            chapter.onChapterEnter.forEach(setLayerOpacity);
+        }
+        if (chapter.callback) {
+            if (map.getLayer('cities-heat-circles') && map.getLayer('counties-heat-fill')) {
+                window[chapter.callback]();
+            }
+        }
+        if (chapter.rotateAnimation) {
+            map.once('moveend', () => {
+                const rotateNumber = map.getBearing();
+                map.rotateTo(rotateNumber + 180, {
+                    duration: 30000, easing: function (t) { return t; }
+                });
+            });
+        }
+        if (config.auto) {
+             var next_chapter = (current_chapter + 1) % config.chapters.length;
+             map.once('moveend', () => {
+                 document.querySelectorAll('[data-scrollama-index="' + next_chapter.toString() + '"]')[0].scrollIntoView();
+             });
+        }
+    })
+    .onStepExit(response => {
+        var chapter = config.chapters.find(chap => chap.id === response.element.id);
+        response.element.classList.remove('active');
+        if (chapter.onChapterExit.length > 0) {
+            chapter.onChapterExit.forEach(setLayerOpacity);
+        }
+    });
+
+
+    if (config.auto) {
+        document.querySelectorAll('[data-scrollama-index="0"]')[0].scrollIntoView();
+    }
+});
+
+function getInsetBounds() {
+    let bounds = map.getBounds();
+    let boundsJson = { "type": "FeatureCollection", "features": [{"type": "Feature","properties": {},"geometry": {"type": "Polygon","coordinates": [[[bounds._sw.lng,bounds._sw.lat],[bounds._ne.lng,bounds._sw.lat],[bounds._ne.lng,bounds._ne.lat],[bounds._sw.lng,bounds._ne.lat],[bounds._sw.lng,bounds._sw.lat]]]}}] }
+    if (initLoad) {
+        addInsetLayer(boundsJson);
+        initLoad = false;
+    } else {
+        updateInsetLayer(boundsJson);
+    }
+}
+
+function addInsetLayer(bounds) {
+    insetMap.addSource('boundsSource', {'type': 'geojson','data': bounds});
+    insetMap.addLayer({'id': 'boundsLayer','type': 'fill','source': 'boundsSource','layout': {},'paint': {'fill-color': '#fff','fill-opacity': 0.2}});
+    insetMap.addLayer({'id': 'outlineLayer','type': 'line','source': 'boundsSource','layout': {},'paint': {'line-color': '#000','line-width': 1}});
+}
+
+function updateInsetLayer(bounds) {
+    insetMap.getSource('boundsSource').setData(bounds);
+}
+
+map.addControl(new mapboxgl.NavigationControl());
+
+window.addEventListener('resize', scroller.resize);
+
+</script>
+
+</body>
+</html>
